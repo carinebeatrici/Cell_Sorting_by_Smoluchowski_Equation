@@ -1,0 +1,97 @@
+program smo_continuous
+  implicit none
+
+  real, allocatable:: n_k(:), n_k_old(:)
+
+
+
+
+  allocate(n_k(n_particles), n_k_old(n_particles))
+  
+  n_k = 0
+  n_k_old = 0
+  
+  n_k[1] = n_particles
+  n_k_old[1] = n_particles
+  
+  idx_dt  = 0
+  s_dt    = s_dt_0
+    
+
+    time_stable   = 0
+    count_stable  = 0    
+    k_mean        = cluster_medio(n_k = n_k)
+    
+    time = time_init
+    
+    delta_image   = 0.1
+    next_image    = 1
+
+    s_time_list = []
+    s_smo_list  = []
+    
+    count       = 0
+
+    output_file = open(smo_cont_result_dir+r"smo_result.dat","w")
+    while time < time_final:
+        
+        for mass_k in range(1, n_particles+1):
+            coag_destruction = 0.0
+            frag_destruction = 0.0
+            for mass_i in range(1, mass_k):
+                coag_destruction += n_k_old[mass_i] * n_k_old[mass_k - mass_i] * matriz_coagulation_kernel[mass_i, mass_k - mass_i]
+                #frag_destruction += - n_k_old[mass_k] * matriz_fragmentation_kernel[mass_i,mass_k-mass_i]
+            coag_destruction *= s_coag_const
+            frag_destruction *= s_frag_const
+
+            coag_creation = 0.0
+            frag_creation = 0.0
+            for mass_j in range(1, n_particles - mass_k + 1):
+                #if mass_j + mass_k <= n_particles:
+                coag_creation += n_k_old[mass_j] * n_k_old[mass_k] * matriz_coagulation_kernel[mass_j, mass_k]
+                #frag_creation += - n_k_old[mass_k + mass_j] * matriz_fragmentation_kernel[mass_j, mass_k]
+            coag_creation *= s_coag_const
+            frag_creation *= s_frag_const
+            n_k[mass_k] = (0.5*(coag_destruction + frag_destruction) - (coag_creation+frag_creation)) * s_dt + n_k_old[mass_k]
+               
+        k_mean_old = k_mean
+        k_mean     = cluster_medio(n_k = n_k)
+        if k_mean < k_mean_old:
+            print("mean cluster decreased "+str(k_mean)+"  "+str(k_mean_old)+"                                                                  ")
+            print(str(time)+"     "+str(count)+"      "+str(cluster_medio(n_k = n_k))+"        "+str(s_dt)+"           ", end = "\r")
+            break
+        
+        
+        n_k_old = [val for val in n_k] 
+        
+        #print(str(time)+"             "+str(cluster_medio(n_k = n_k))+"        "+str(s_dt)+"           ", end = "\r")
+        
+        if time >= next_image:
+            k_mean        = cluster_medio(n_k = n_k)
+            output_string = str(time)+" "+str(k_mean)
+            output_file.write(output_string+"\n")
+            
+            next_image += delta_image*10**(mt.log10(time))
+            print(output_string+"  "+str(next_image)+"                       ", end = "\r")
+            
+            s_time_list.append(time)
+            s_smo_list.append(k_mean) 
+            
+    
+            if k_mean > n_particles - 1 and time_stable == 0:
+                time_stable = time
+            elif k_mean > n_particles - 1 and time_stable != 0:
+                count_stable += 1
+            
+        if count in s_dt_mult_list: 
+            s_dt *= s_dt_mult_list[count]
+            #print(count, " \t %.4f "%time, " \t %.4f "%k_mean, s_dt)    
+        count += 1     
+        if count_stable > 5:
+            break
+        time += s_dt
+        
+    output_file.close()  
+
+
+end program smo_continuous
