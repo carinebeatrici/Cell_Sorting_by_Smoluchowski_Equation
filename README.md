@@ -1,0 +1,2 @@
+# Cell_Sorting_by_Smoluchowski_Equation
+Cellular cluster cluster aggregation described by Smoluchowski Coagulation Equation
